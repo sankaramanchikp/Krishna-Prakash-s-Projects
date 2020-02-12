@@ -1,0 +1,423 @@
+install.packages('stringr')
+install.packages('mice')
+install.packages('corrplot')
+install.packages('ggplot2')
+install.packages('rpart')
+install.packages('pls')
+
+
+library(stringr)
+library(mice)
+library(corrplot)
+library(ggplot2)
+library(rpart)
+library(pls)
+
+
+fifa = read.csv("data.csv")
+
+# Removing symbols in dataset is required to be able to perform any analysis on the numeric values
+# For weight, the 'lbs' is suffixed to the integer value, which needs to be removed and 
+# converted to numeric object type
+
+fifa$Weight = as.numeric(gsub("\\lbs", "", fifa$Weight))
+
+# For Value, the '???' and 'M' or 'K' is attached to the integer value, 
+# which needs to be removed and converted to numeric object type
+
+fifa$Value <- ifelse(str_detect(fifa$Value, "M")==TRUE, as.numeric(gsub("[\\€M]", "",fifa$Value)),
+                     ifelse(str_detect(fifa$Value, "K")==TRUE, as.numeric(gsub("[\\€K]", "", fifa$Value))/1000,NA))
+
+# For Release.CLause, the '???' and 'M' or 'K' is attached to the integer value, 
+# which needs to be removed and converted to numeric object type
+
+fifa$Release.Clause <- ifelse(str_detect(fifa$Release.Clause, "M")==TRUE, as.numeric(gsub("[\\€M]", "",fifa$Release.Clause)),
+                              ifelse(str_detect(fifa$Release.Clause, "K")==TRUE, as.numeric(gsub("[\\€K]", "", fifa$Release.Clause))/1000, NA))
+
+# For Wage, the '???' and 'M' or 'K' is attached to the integer value, 
+# which needs to be removed and converted to numeric object type
+
+fifa$Wage <- ifelse(str_detect(fifa$Wage, "M")==TRUE, as.numeric(gsub("[\\€M]", "",fifa$Wage)),
+                    ifelse(str_detect(fifa$Wage, "K")==TRUE, as.numeric(gsub("[\\€K]", "", fifa$Wage))/1000, NA))
+
+
+fifa[,27] = as.character(fifa[,27])
+
+for(i in 1:18207){
+    b = as.numeric(unlist(strsplit(fifa[i,27], "\\'")))
+    fifa[i,27] = b[1]*30.48 + b[2]*2.54
+}
+
+# a = "91+2"
+# c = a[1,1]
+# b = strsplit(a,split = '\\+')
+# b = sum(as.numeric(unlist(strsplit(a, "\\+"))))
+
+#fifa_sample = fifa[sample(nrow(fifa),5),]
+
+for(i in 29:54){
+  fifa[,i] = as.character(fifa[,i])
+}
+
+
+for(i in 1:18207){
+  for(j in 29:54){
+    fifa[i,j] = sum(as.numeric(unlist(strsplit(fifa[i,j], "\\+"))))
+  }
+}
+
+for(i in 27:54){
+  fifa[,i] = as.numeric(fifa[,i])
+}
+
+  
+#Missing value Treatment
+
+#Finding the columns with Missing values
+
+#Here we can see that some columns have missing values. Installing MICE package#MICE package generates Multivariate Imputations by Chained Equations (MICE)
+
+#mice package has a function known as md.pattern(). It returns a tabular form of missing value present in each variable in a data set
+
+#md.pattern(fifa[,c(12,13,16:18,23,18,55:89)])
+
+# First, worked with sample data as MICE package takes a lot of time in executing big data. Now commenting out the sampling part
+#smp_size = floor(0.1 * nrow(fifa))
+#sample = sample(seq_len(nrow(fifa)), size = smp_size)
+#sample1 = fifa[sample,]
+
+colSums(is.na(fifa))
+
+#Taking out missing value columns
+sample1 = fifa[,c(12,13,16:18,23,27:28,55:89)]
+
+#Executing Multiple Imputation with MICE function with 5 iterations
+fifa1 = mice(sample1, m=1)
+completeData = complete(fifa1,1)
+fifa[,c(12,13,16:18,23,27:28,55:89)] = completeData
+
+#Checking for missing values again
+colSums(is.na(fifa))
+
+#Explortory Data Analysis
+
+#Analyzing the relation between Value and all other variables
+cor = cor(fifa[,c(12,55:70)])
+cor1 = cor(fifa[,c(12,71:89)])
+corrplot(cor, method = "circle")
+corrplot(cor1, method = "circle")
+
+#Analyzing the relation between Value and Wage
+plot(fifa$Value, fifa$Wage)
+
+
+#Creating a new Variable for Position as "Attacker", "Mid Fielder", "Defender"
+
+fifa$Position_1 = ifelse(fifa$Position == "CF" | fifa$Position == "LF" | fifa$Position == "LS" | fifa$Position == "LW" | fifa$Position == "RF" | fifa$Position == "RS" | fifa$Position == "RW" | fifa$Position == "ST", fifa$Position_1 <- "Attacker",
+                         ifelse(fifa$Position == "GK", fifa$Position_1 <- "Goalkeeper", ifelse(fifa$Position == "CB" | fifa$Position == "LB" | fifa$Position == "LCB" | fifa$Position == "LWB" | fifa$Position == "RB" | fifa$Position == "RCB" | fifa$Position == "RWB", fifa$Position_1 <- "Defender", fifa$Position_1 <- "Mid-Fielder")))
+
+ggplot(data = fifa, aes(Position_1)) + geom_bar(fill = "steelblue") + ggtitle("Count of Players in each Position")
+
+ggplot(data = fifa, aes(x=Position_1, y=Value)) + geom_bar(stat = "identity") + ggtitle("Value of Players in each Position")
+
+par(mfrow=c(4,5))
+
+plot(fifa$Value,fifa$Penalties,main="Penalties",axes=FALSE, frame.plot=TRUE,cex.main=1, pch = 15, col = "red") 
+plot(fifa$Value,fifa$Stamina,main="Stamina",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 15, col = "red") 
+plot(fifa$Value,fifa$Dribbling,main="Dribbling",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 15, col = "red") 
+plot(fifa$Value,fifa$Volleys,main="Volleys",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 15, col = "red") 
+plot(fifa$Value,fifa$Acceleration,main="Acceleration",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 15, col = "red") 
+plot(fifa$Value,fifa$Jumping,main="Jumping",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 16, col = "aquamarine3") 
+plot(fifa$Value,fifa$LongShots,main="LongShots",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 16, col = "aquamarine3") 
+plot(fifa$Value,fifa$Positioning,main="Positioning",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 16, col = "aquamarine3") 
+plot(fifa$Value,fifa$Balance,main="Balance",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 16, col = "aquamarine3") 
+plot(fifa$Value,fifa$Composure,main="Composure",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 16, col = "aquamarine3") 
+plot(fifa$Value,fifa$Age,main="Age",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 17, col = "bisque4") 
+plot(fifa$Value,fifa$Wage,main="Wage",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 17, col = "bisque4") 
+plot(fifa$Value,fifa$Weight,main="Weight",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 17, col = "bisque4") 
+plot(fifa$Value,fifa$SlidingTackle,main="SlidingTackle",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 17, col = "bisque4") 
+plot(fifa$Value,fifa$Vision,main="Vision",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 17, col = "bisque4") 
+plot(fifa$Value,fifa$BallControl,main="BallControl",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 18, col = "blue")
+plot(fifa$Value,fifa$Finishing,main="Finishing",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 18, col = "blue") 
+plot(fifa$Value,fifa$HeadingAccuracy,main="HeadingAccuracy",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 18, col = "blue") 
+plot(fifa$Value,fifa$SprintSpeed,main="SprintSpeed",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 18, col = "blue") 
+plot(fifa$Value,fifa$Interceptions,main="Interceptions",axes=FALSE, frame.plot=TRUE,cex.main=1,pch = 18, col = "blue") 
+
+par(mfrow=c(1,1))
+### PLot based Overall rating distribution :
+library(ggplot2)
+g_overall <- ggplot(data = fifa, aes(fifa$Overall))
+g_overall + geom_histogram(col="red", aes(fill = ..count..)) + ggtitle("overall rating distribution")
+
+
+### PLot based Overall vs Potential :
+library(ggplot2)
+g_overall2 <- ggplot(data = fifa, aes(x=fifa$Overall, y=fifa$Potential))+ geom_point(size=2, shape=23)
+g_overall2
+
+### PLot based on distribution of value among players  :
+ggplot(data=fifa, aes(x = fifa$Value)) + 
+  geom_bar(col = "orange", aes(fill = ..count..)) + ggtitle("Distribution of Value among players")
+
+######Top 10 players by value:
+
+library(dplyr)
+
+fifa_dist<-fifa %>%
+  select(Value, Name) %>%
+  arrange(desc(Value))
+sliced_data_set<-fifa_dist%>%slice(1:10)
+sliced_data_set
+
+
+#######Top 10 players by overall rating 
+
+library(dplyr)
+
+fifa_dist1<-fifa %>%
+  select(Overall, Name) %>%
+  arrange(desc(Overall))
+sliced_data_set1<-fifa_dist1%>%slice(1:10)
+
+#Hypothesis Testing
+
+#Problem Statement: To check if Attackers have more Value than Defenders
+
+#Null Hypothesis: The average value of Attackers is less than that of Defenders
+
+#Alternate Hypothesis: The average value of Attackers is greater than that of Defenders
+
+#Considering Confidence Level as 95%
+
+#Getting the data
+
+attackers = subset(fifa$Value, fifa$Position_1 == 'Attacker')
+defenders = subset(fifa$Value, fifa$Position_1 == 'Defender')
+
+#Taking Sample of 30 from both the sets
+
+set.seed(123)
+attack_sample = sample(attackers,30)
+defend_sample = sample(defenders,30)
+
+#Performing the Hypothesis test ## Sneha
+
+t.test(attack_sample, defend_sample, alternative = "greater")
+
+#The p-value (The probability of attckers' value less than defenders' value) is greater than our confidence level
+#Hence we fail to reject the hypothesis
+
+#We do not have enough evidence to prove that attackers have greater value than defenders
+
+#Statistical Modeling
+
+test = fifa #Taking test to fifa so that we don't have to load from DB again and again
+
+#Merging the columns of positions to reduce the number of features (Feature Engineering)
+test$Forward = rowMeans(fifa[,29:36])
+test$Midfield = rowMeans(fifa[,37:44])
+test$Defense = rowMeans(fifa[,45:54])
+test = test[,-c(29:54)]
+
+#Taking sample of 3000
+#fifasample = test[sample(nrow(test), 3000),]
+
+#Seperating data for GK and not in GK. because, the model acts in a way for an outfield player and for a Goal Keeper
+fifasample1 = subset(test, test$Position != 'GK')
+fifasample2 = subset(test, test$Position == 'GK')
+
+#Linear Regression without GK
+firstreg1 = lm(Value ~ Release.Clause + Forward + Midfield + Defense + Height+Weight+Crossing+Finishing+HeadingAccuracy+ShortPassing+Volleys+Dribbling+Curve+FKAccuracy+LongPassing+BallControl+Acceleration+SprintSpeed+Agility+Reactions+Balance+ShotPower+Jumping+Stamina+Strength+LongShots+Aggression+Interceptions+Positioning+Vision+Penalties+Composure+Marking+StandingTackle+SlidingTackle
+, data = fifasample1)
+summary(firstreg1)
+AIC(firstreg1)
+BIC(firstreg1)
+par(mfrow=c(2,2))
+plot(firstreg1)
+
+#Linear Regression for GK
+firstreg2 = lm(Value ~ Release.Clause + Forward + Midfield + Defense + Height+Weight+GKDiving+GKHandling+GKKicking+GKPositioning+GKReflexes
+               , data = fifasample2)
+summary(firstreg2)
+AIC(firstreg2)
+BIC(firstreg2)
+par(mfrow=c(2,2))
+plot(firstreg2)
+
+#LASSO
+###lasso regression excluding goalkeeper
+library(glmnet)
+x1 <- data.matrix(fifasample1[c(27:57,63,65:67)])#converting to matrix to be able to perform lasso regression
+y1 <- fifasample1$Value
+lambdas <- 10^seq(10, -2, by = -.1) 
+fifafit1 <- glmnet(x1, y1, alpha = 1, lambda = lambdas, nlambda = 1000) 
+summary(fifafit1)
+cv_fit1 <- cv.glmnet(x1, y1, alpha = 1, lambda = lambdas, nlambda = 1000) 
+plot(cv_fit1)
+cv_fit$lambda.min
+fit_opt1 <- glmnet(x1, y1, alpha = 1, lambda = cv_fit$lambda.min) 
+fit_opt1$beta
+plot(fifafit1)
+
+
+###lasso regression for goalkeeper
+x2 <- data.matrix(fifasample2[c(27:28,58:63)])#converting to matrix to be able to perform lasso regression
+y2 <- fifasample2$Value
+lambdas <- 10^seq(10, -2, by = -.1) 
+fifafit2 <- glmnet(x2, y2, alpha = 1, lambda = lambdas, nlambda = 1000) 
+summary(fifafit2)
+plot(fifafit2)
+cv_fit2 <- cv.glmnet(x2, y2, alpha = 1, lambda = lambdas, nlambda = 1000) 
+plot(cv_fit2)
+cv_fit2$lambda.min
+fit_opt2 <- glmnet(x2, y2, alpha = 1, lambda = cv_fit1$lambda.min) 
+fit_opt2$beta
+
+#PCA
+fifapca <- c(fifa[6],fifa[12], fifa[27:89])
+fifapca <- data.frame(na.omit(fifapca))
+pcafifa <- prcomp(fifapca, center = TRUE, scale. = TRUE)
+summary(pcafifa)
+
+#Evaluating PCA and forming regression equation
+pcamodel <- lm(fifapca$Value~pcafifa$x[,1]+pcafifa$x[,2]+pcafifa$x[,3]+pcafifa$x[,4])
+summary(pcamodel)
+plot(pcafifa$x[,1:4])
+AIC(pcamodel)
+BIC(pcamodel)
+
+
+#PCR Model
+
+pcreg = pcr(Value ~ Release.Clause + Forward + Midfield + Defense + Height+Weight+Crossing+Finishing+HeadingAccuracy+ShortPassing+Volleys+Dribbling+Curve+FKAccuracy+LongPassing+BallControl+Acceleration+SprintSpeed+Agility+Reactions+Balance+ShotPower+Jumping+Stamina+Strength+LongShots+Aggression+Interceptions+Positioning+Vision+Penalties+Composure+Marking+StandingTackle+SlidingTackle
+            , data = fifasample1)
+
+summary(pcreg)
+
+par(mfrow=c(1,2))
+validationplot(pcreg, val.type = "R2")
+validationplot(pcreg, val.type = "RMSE")
+
+
+#Decision Trees
+set.seed(123)
+library(rattle)
+library(rpart.plot)
+library(RColorBrewer)
+
+fifasampletest = test[sample(nrow(test), 1),]
+#For Outfield Player
+decreg1 = rpart(Value ~ Release.Clause + Forward + Midfield + Defense + Height+Weight+Crossing+Finishing+HeadingAccuracy+ShortPassing+Volleys+Dribbling+Curve+FKAccuracy+LongPassing+BallControl+Acceleration+SprintSpeed+Agility+Reactions+Balance+ShotPower+Jumping+Stamina+Strength+LongShots+Aggression+Interceptions+Positioning+Vision+Penalties+Composure+Marking+StandingTackle+SlidingTackle
+                , data = fifasample1, method="anova")
+
+summary(decreg1)
+
+par(mfrow=c(1,1))
+fancyRpartPlot(decreg1, caption = NULL)
+printcp(decreg1)
+
+  par(mfrow=c(1,2)) 
+  rsq.rpart(decreg1)
+
+yhat = predict(decreg1, fifasampletest)
+actual = fifasampletest$Value
+rmse = sqrt(mean((yhat-actual)^2))
+rmse
+
+#For Goal Keeper
+fifasampletest1 = subset(test, test$Position == "GK")
+fifasampletest1 = fifasampletest1[sample(nrow(fifasampletest1), 1),]
+decreg2 = rpart(Value ~ Release.Clause + Forward + Midfield + Defense + Height+Weight+GKDiving+GKHandling+GKKicking+GKPositioning+GKReflexes
+                , data = fifasample2, method="anova")
+
+summary(decreg2)
+
+
+par(mfrow=c(1,1))
+fancyRpartPlot(decreg2, caption = NULL)
+printcp(decreg2)
+
+par(mfrow=c(1,2)) 
+rsq.rpart(decreg2)
+
+yhat1 = predict(decreg2, fifasampletest1)
+
+actual = fifasampletest1$Value
+
+rmse = sqrt(mean((yhat1-actual)^2))
+rmse
+
+#GBM - Gradient Boosted Machine
+par(mfrow=c(1,1))
+library(gbm)
+decreg2 = gbm(Value ~ Release.Clause + Forward + Midfield + Defense + Height+Weight+Crossing+Finishing+HeadingAccuracy+ShortPassing+Volleys+Dribbling+Curve+FKAccuracy+LongPassing+BallControl+Acceleration+SprintSpeed+Agility+Reactions+Balance+ShotPower+Jumping+Stamina+Strength+LongShots+Aggression+Interceptions+Positioning+Vision+Penalties+Composure+Marking+StandingTackle+SlidingTackle
+                , data = fifasample1)
+summary(decreg2)
+
+####Random_Forest_regressor:
+
+max(test$Release.Clause)
+library(randomForest)
+set.seed(300)
+train_dataset <- sample_frac(fifasample, 0.7)
+index_value<- as.numeric(rownames(train_dataset))
+test_dataset <- fifasample[-index_value, ]   #splitting data into training and test data set :
+
+which( colnames(fifasample1)=="Release.Clause" )# without release.clause
+
+################################
+
+#Random_Forest regression without GK and without Release Clause:
+library(randomForest)
+set.seed(300)
+Fifa_RabndomForest<-randomForest(Value~Forward + Midfield + Defense + Height+Weight+Crossing+Finishing+HeadingAccuracy+ShortPassing+Volleys+Dribbling+Curve+FKAccuracy+LongPassing+BallControl+Acceleration+SprintSpeed+Agility+Reactions+Balance+ShotPower+Jumping+Stamina+Strength+LongShots+Aggression+Interceptions+Positioning+Vision+Penalties+Composure+Marking+StandingTackle+SlidingTackle,data=train_dataset)
+plot(Fifa_RabndomForest)#how error decreases upon increasing number of trees-->80%
+Fifa_RabndomForest
+
+##Evaluating model_performance :with multiple folds:
+set.seed(1007)
+library(caret)
+NR53<- trainControl(method="repeatedcv", number=5, repeats=3)
+
+
+Train_model53<-train(Value~Forward + Midfield + Defense + Height+Weight+Crossing+Finishing+HeadingAccuracy+ShortPassing+Volleys+Dribbling+Curve+FKAccuracy+LongPassing+BallControl+Acceleration+SprintSpeed+Agility+Reactions+Balance+ShotPower+Jumping+Stamina+Strength+LongShots+Aggression+Interceptions+Positioning+Vision+Penalties+Composure+Marking+StandingTackle+SlidingTackle, data=train_dataset, method="rf", trControl = NR53)
+plot(Train_model53$finalModel)
+Train_model53$finalModel$forest
+post_prediction<-predict(Train_model53, test_dataset)
+
+
+plot(post_prediction)
+#######################################################
+#Random_Forest regression without GK and with Release Clause+age,wage,reputation:-->92.75%
+library(randomForest)
+set.seed(375)
+Fifa_RabndomForest1<-randomForest(Value~Age+International.Reputation+Overall+Wage+Release.Clause+ Forward + Midfield + Defense + Height+Weight+Crossing+Finishing+HeadingAccuracy+ShortPassing+Volleys+Dribbling+Curve+FKAccuracy+LongPassing+BallControl+Acceleration+SprintSpeed+Agility+Reactions+Balance+ShotPower+Jumping+Stamina+Strength+LongShots+Aggression+Interceptions+Positioning+Vision+Penalties+Composure+Marking+StandingTackle+SlidingTackle,data=train_dataset)
+plot(Fifa_RabndomForest1)#how error decreases upon increasing number of trees
+Fifa_RabndomForest1
+
+###Evaluating model_performance :with multiple folds:-->94.01%(adding release claues age, wage , international rep.)
+set.seed(375)
+Train_model53_new<-train(Value~Age+International.Reputation+Overall+Wage+Release.Clause+Forward + Midfield + Defense + Height+Weight+Crossing+Finishing+HeadingAccuracy+ShortPassing+Volleys+Dribbling+Curve+FKAccuracy+LongPassing+BallControl+Acceleration+SprintSpeed+Agility+Reactions+Balance+ShotPower+Jumping+Stamina+Strength+LongShots+Aggression+Interceptions+Positioning+Vision+Penalties+Composure+Marking+StandingTackle+SlidingTackle, data=train_dataset, method="rf", trControl = NR53)
+plot(Train_model53_new$finalModel)
+Train_model53_new$finalModel$forest
+post_prediction_new<-predict(Train_model53_new, test_dataset)
+
+
+##########################
+
+#Random_Forest regression with GK and with Release Clause+age,wage etc.:-->94% var explained
+
+library(randomForest)
+set.seed(445)
+Fifa_RabndomForest_GK<-randomForest(Value~Age+International.Reputation+Overall+Wage+Release.Clause + Forward + Midfield + Defense + Height+Weight+GKDiving+GKHandling+GKKicking+GKPositioning+GKReflexes, data= train_dataset)
+plot(Fifa_RabndomForest_GK)#how error decreases upon increasing number of trees
+Fifa_RabndomForest_GK
+
+###Evaluating model_performance with multiple folds: for increasing efficiency:--->95.21%
+set.seed(575)
+Train_model53_GK<-train(Value~Age+International.Reputation+Overall+Wage+Release.Clause + Forward + Midfield + Defense + Height+Weight+GKDiving+GKHandling+GKKicking+GKPositioning+GKReflexes, data= train_dataset,method="rf", trControl = NR53)
+Train_model53_GK$finalModel
+plot(Train_model53_GK$finalModel)
+Train_model53_GK$finalModel$forest
+post_prediction_GK<-predict(Train_model53_GK, test_dataset)
+##########
